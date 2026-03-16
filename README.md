@@ -76,6 +76,8 @@ DIGITAL_TWIN/
 │   └── vite.config.js
 ├── nginx/
 │   └── default.conf         # nginx config (HTTP → HTTPS redirect, API proxy)
+├── config/
+│   └── professor_context.txt  # Avatar persona, topics, tone — edit this to customise
 ├── scripts/
 │   ├── deploy.py            # Paramiko-based deploy script
 │   ├── server_setup.sh      # One-time server provisioning
@@ -84,6 +86,92 @@ DIGITAL_TWIN/
 ├── .gitignore               # Excludes .env, node_modules, dist, __pycache__
 └── README.md
 ```
+
+---
+
+## Running the Deploy Script (Windows / PowerShell)
+
+Open **PowerShell** and run:
+
+```powershell
+cd C:\Users\westl\Documents\GitHub\DIGITAL_TWIN
+python scripts\deploy.py
+```
+
+> **First time only** — install the required Python library:
+> ```powershell
+> pip install paramiko
+> ```
+
+The script will SSH into the server, upload all files, build the frontend, and restart the backend automatically. It takes about 60–90 seconds.
+
+---
+
+## Customising the Avatar (professor_context.txt)
+
+Open `config\professor_context.txt` in any text editor (Notepad, VS Code, etc.) and edit the sections below. Lines starting with `#` are comments and are ignored.
+
+### Sections
+
+**`IDENTITY:`**
+Who the avatar is. Write in second person ("You are..."). Include background, expertise, and how the avatar should introduce itself.
+
+```
+IDENTITY:
+You are Professor J Christopher Westland, a professor at UIC specialising in
+Information Systems. You are patient, rigorous, and use real-world examples.
+```
+
+**`ALLOWED_TOPICS:`**
+Bullet list of topics the avatar will engage with fully. Be as specific or broad as you like.
+
+```
+ALLOWED_TOPICS:
+- Information systems and technology management
+- Financial accounting and auditing
+- Statistics and quantitative methods
+```
+
+**`RESTRICTED_TOPICS:`**
+Bullet list of topics the avatar will politely decline. It will redirect the student back to coursework.
+
+```
+RESTRICTED_TOPICS:
+- Personal or romantic advice
+- Medical or legal advice
+- Academic dishonesty or plagiarism
+```
+
+**`TONE:`**
+Instructions for communication style — how formal, how to handle confused students, how to redirect off-topic questions.
+
+```
+TONE:
+- Conversational, like office hours
+- If a student seems confused, slow down and use an analogy
+- If off-topic: "That's outside what I can help with — let's get back to [topic]."
+```
+
+**`COURSE_CONTEXT:`**
+Current semester details, course codes, office hours, or any timely information.
+
+```
+COURSE_CONTEXT:
+Current courses: IS 572, IS 451
+Semester: Spring 2026
+Office hours: By appointment — westland@uic.edu
+```
+
+### Applying your changes
+
+After editing the file, deploy from PowerShell:
+
+```powershell
+cd C:\Users\westl\Documents\GitHub\DIGITAL_TWIN
+python scripts\deploy.py
+```
+
+The new context takes effect immediately after the backend restarts (happens automatically during deploy).
 
 ---
 
@@ -97,38 +185,32 @@ DIGITAL_TWIN/
 
 ### 1. Configure environment
 
-```bash
-cp .env.example .env
-# Edit .env and fill in:
-#   OPENAI_API_KEY
-#   TAVUS_API_KEY
-#   TAVUS_REPLICA_ID
-#   PROFESSOR_NAME
-#   SERVER_URL
+Copy `.env.example` to `.env` and fill in:
+
+| Variable | Value |
+|----------|-------|
+| `OPENAI_API_KEY` | From platform.openai.com |
+| `TAVUS_API_KEY` | From platform.tavus.io |
+| `TAVUS_REPLICA_ID` | Your replica ID from Tavus |
+| `PROFESSOR_NAME` | Your name |
+| `SERVER_URL` | `https://askchris.guru` |
+
+### 2. Deploy to server (PowerShell)
+
+```powershell
+cd C:\Users\westl\Documents\GitHub\DIGITAL_TWIN
+python scripts\deploy.py
 ```
-
-### 2. Deploy to server
-
-```bash
-python3 scripts/deploy.py
-```
-
-This will:
-- SSH into the DigitalOcean droplet
-- Upload all backend + frontend files
-- Install Python dependencies
-- Build the React frontend
-- Restart the `digital-twin` systemd service and nginx
 
 ### 3. First-time HTTPS setup (run once after DNS propagates)
 
-Point your domain's A record at `143.198.228.58`, wait for DNS propagation, then:
+Point your domain's A record at `143.198.228.58`, wait for DNS propagation, then run from PowerShell:
 
-```bash
-ssh root@143.198.228.58 "certbot --nginx -d yourdomain.com -d www.yourdomain.com --non-interactive --agree-tos --email admin@yourdomain.com --redirect"
+```powershell
+ssh root@143.198.228.58 "certbot --nginx -d askchris.guru -d www.askchris.guru --non-interactive --agree-tos --email admin@askchris.guru --redirect"
 ```
 
-> **Important:** After running certbot, do NOT redeploy with `deploy.py` unless you need to — the deploy script intentionally skips nginx to preserve the SSL configuration.
+> **Note:** The deploy script skips the nginx config after SSL is set up, so redeploying will never break HTTPS.
 
 ---
 
