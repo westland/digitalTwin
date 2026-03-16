@@ -29,10 +29,13 @@ fi
 "$APP_DIR/backend/venv/bin/pip" install --upgrade pip -q
 
 # --- Nginx ---
-cp /opt/digital-twin/nginx/default.conf /etc/nginx/sites-available/digital-twin
-ln -sf /etc/nginx/sites-available/digital-twin /etc/nginx/sites-enabled/digital-twin
-rm -f /etc/nginx/sites-enabled/default
-nginx -t && systemctl enable nginx && systemctl restart nginx
+# Only overwrite nginx config if SSL is not yet configured (preserve certbot changes)
+if ! grep -q "listen 443" /etc/nginx/sites-available/digital-twin 2>/dev/null; then
+    cp /opt/digital-twin/nginx/default.conf /etc/nginx/sites-available/digital-twin
+    ln -sf /etc/nginx/sites-available/digital-twin /etc/nginx/sites-enabled/digital-twin
+    rm -f /etc/nginx/sites-enabled/default
+fi
+nginx -t && systemctl enable nginx && systemctl reload nginx
 
 # --- Systemd service for FastAPI backend ---
 cat > /etc/systemd/system/digital-twin.service << 'EOF'
