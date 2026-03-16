@@ -205,22 +205,26 @@ async def start_conversation(req: ConversationRequest):
     if not tavus:
         raise HTTPException(503, "Tavus not configured — set TAVUS_API_KEY in .env")
 
-    persona_id = persona_store.get("default") or os.getenv("TAVUS_PERSONA_ID")
+    persona_id = persona_store.get("default") or os.getenv("TAVUS_PERSONA_ID", "").strip()
     if not persona_id:
-        raise HTTPException(400, "No persona configured. POST /api/persona first.")
-
-    server_url = os.getenv("SERVER_URL", "http://143.198.228.58")
-    custom_llm_url = f"{server_url}/api/llm"
+        # Auto-create persona on first use
+        replica_id = os.getenv("TAVUS_REPLICA_ID", "").strip() or None
+        prof_name = os.getenv("PROFESSOR_NAME", "Professor")
+        system_prompt = _build_system_prompt(None, None, None)
+        result = await tavus.create_persona(
+            name=prof_name,
+            system_prompt=system_prompt,
+            replica_id=replica_id,
+        )
+        persona_id = result.get("persona_id") or result.get("id")
+        if not persona_id:
+            raise HTTPException(500, "Failed to auto-create Tavus persona.")
+        persona_store["default"] = persona_id
+        logger.info(f"Auto-created persona: {persona_id}")
 
     result = await tavus.create_conversation(
         persona_id=persona_id,
-        custom_llm_url=custom_llm_url,
         conversation_name=req.topic or "Teaching Session",
-        properties={
-            "enable_recording": False,
-            "apply_greenscreen": False,
-            "language": "english",
-        }
     )
     conversation_id = result.get("conversation_id") or result.get("id")
     logger.info(f"Conversation started: {conversation_id}")

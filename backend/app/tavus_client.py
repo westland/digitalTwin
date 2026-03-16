@@ -27,18 +27,14 @@ class TavusClient:
         name: str,
         system_prompt: str,
         replica_id: Optional[str] = None,
-        voice_id: Optional[str] = None
     ) -> dict:
         """Create or get a Tavus persona."""
         payload = {
             "persona_name": name,
             "system_prompt": system_prompt,
-            "context": "You are an AI teaching assistant delivering personalized instruction.",
         }
         if replica_id:
             payload["default_replica_id"] = replica_id
-        if voice_id:
-            payload["default_replica_id"] = replica_id  # voice is part of replica
 
         async with httpx.AsyncClient() as client:
             resp = await client.post(
@@ -53,14 +49,12 @@ class TavusClient:
     async def create_conversation(
         self,
         persona_id: str,
-        custom_llm_url: Optional[str] = None,
         conversation_name: Optional[str] = None,
-        properties: Optional[dict] = None
     ) -> dict:
         """
         Start a CVI conversation session.
         Returns conversation object with `conversation_url` for embedding.
-        custom_llm_url: your backend endpoint /api/llm — Tavus will POST here instead of its own LLM.
+        custom_llm_url is configured on the persona, not the conversation.
         """
         payload = {
             "persona_id": persona_id,
@@ -70,10 +64,6 @@ class TavusClient:
         }
         if conversation_name:
             payload["conversation_name"] = conversation_name
-        if custom_llm_url:
-            payload["custom_llm_url"] = custom_llm_url
-        if properties:
-            payload["properties"] = properties
 
         async with httpx.AsyncClient() as client:
             resp = await client.post(
@@ -82,6 +72,8 @@ class TavusClient:
                 json=payload,
                 timeout=30.0
             )
+            if not resp.is_success:
+                logger.error(f"Tavus create_conversation failed {resp.status_code}: {resp.text}")
             resp.raise_for_status()
             return resp.json()
 

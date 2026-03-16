@@ -4,8 +4,10 @@
  * - Embeds the Tavus conversation URL in an iframe
  * - Triggers lecture script generation
  */
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
 import { startConversation, endConversation, generateLectureScript } from '../api/client.js'
+
+const isMobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent)
 
 export default function AvatarSession({ sessionId, onSessionChange }) {
   const [conversationId, setConversationId]   = useState(null)
@@ -56,11 +58,41 @@ export default function AvatarSession({ sessionId, onSessionChange }) {
     }
   }, [conversationId, topic])
 
-  // Active session view
+  // Active session view — mobile opens new tab, desktop embeds iframe
   if (conversationUrl) {
+    if (isMobile) {
+      return (
+        <div style={styles.mobileContainer}>
+          <div style={styles.card}>
+            <h2 style={styles.title}>Session Active</h2>
+            <p style={styles.subtitle}>Topic: <strong>{topic}</strong></p>
+            <p style={styles.subtitle}>
+              Tap the button below to open your digital twin session. Allow microphone access when prompted.
+            </p>
+            <a href={conversationUrl} target="_blank" rel="noopener noreferrer" style={styles.joinBtn}>
+              Open Session
+            </a>
+            <div style={{ display:'flex', gap:10, marginTop:16, justifyContent:'center' }}>
+              <button onClick={handleLecture} disabled={generating} style={{ ...styles.btn, background:'#7c3aed' }}>
+                {generating ? 'Generating…' : 'Generate Lecture'}
+              </button>
+              <button onClick={handleEnd} style={{ ...styles.btn, background:'#dc2626' }}>
+                End Session
+              </button>
+            </div>
+            {lectureScript && (
+              <details style={{ ...styles.scriptBox, marginTop:16 }}>
+                <summary style={{ cursor:'pointer', color:'#7c3aed', fontWeight:600 }}>Lecture Script</summary>
+                <pre style={styles.scriptText}>{lectureScript}</pre>
+              </details>
+            )}
+          </div>
+        </div>
+      )
+    }
+
     return (
       <div style={styles.sessionContainer}>
-        {/* Tavus avatar iframe — full conversation UI */}
         <iframe
           src={conversationUrl}
           allow="camera; microphone; autoplay; display-capture"
@@ -68,23 +100,22 @@ export default function AvatarSession({ sessionId, onSessionChange }) {
           title="Digital Twin Session"
         />
         <div style={styles.controls}>
-          <span style={styles.topicBadge}>📖 {topic}</span>
+          <span style={styles.topicBadge}>Topic: {topic}</span>
           <button
             onClick={handleLecture}
             disabled={generating}
             style={{ ...styles.btn, background: '#7c3aed' }}
-            title="Generate and prime avatar with a lecture on this topic"
           >
-            {generating ? '⏳ Generating…' : '🎓 Start Lecture'}
+            {generating ? 'Generating…' : 'Start Lecture'}
           </button>
           <button onClick={handleEnd} style={{ ...styles.btn, background: '#dc2626' }}>
-            ⏹ End Session
+            End Session
           </button>
         </div>
         {lectureScript && (
           <details style={styles.scriptBox}>
             <summary style={{ cursor: 'pointer', color: '#7c3aed', fontWeight: 600 }}>
-              📝 Generated Lecture Script (primed into avatar context)
+              Generated Lecture Script
             </summary>
             <pre style={styles.scriptText}>{lectureScript}</pre>
           </details>
@@ -131,6 +162,8 @@ export default function AvatarSession({ sessionId, onSessionChange }) {
 }
 
 const styles = {
+  mobileContainer: { display:'flex',alignItems:'center',justifyContent:'center',minHeight:'100vh',background:'#0f1117',padding:24 },
+  joinBtn: { display:'block',padding:'14px 28px',background:'#2563eb',color:'#fff',borderRadius:10,fontSize:16,fontWeight:700,textDecoration:'none',textAlign:'center',marginTop:8 },
   sessionContainer: { display:'flex',flexDirection:'column',height:'100vh',background:'#0f1117' },
   iframe: { flex:1,border:'none',width:'100%' },
   controls: { display:'flex',alignItems:'center',gap:12,padding:'12px 16px',background:'#1a1d2e',borderTop:'1px solid #333',flexWrap:'wrap' },

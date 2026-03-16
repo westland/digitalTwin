@@ -25,7 +25,6 @@ INCLUDE = [
     "frontend/index.html",
     "frontend/package.json",
     "frontend/vite.config.js",
-    "nginx/default.conf",
     "scripts/server_setup.sh",
     ".env.example",
     ".env",
@@ -104,9 +103,9 @@ def main():
     out = ssh_run(ssh, "systemctl is-active digital-twin", check=False)
     status = out.strip()
     if "active" in status:
-        print(f"\n✅ Backend is {status}")
+        print(f"\nBackend is {status}")
     else:
-        print(f"\n⚠  Backend status: {status}")
+        print(f"\nWARNING: Backend status: {status}")
         print("   Check logs: tail -f /opt/digital-twin/logs/backend.log")
 
     ssh_run(ssh, "systemctl reload nginx || systemctl restart nginx", check=False)
@@ -115,17 +114,10 @@ def main():
     ssh.close()
 
     print(f"""
-╔══════════════════════════════════════════════════════════╗
-║  Digital Twin deployed!                                  ║
-║                                                          ║
-║  🌐  http://{HOST}                             ║
-║  📋  API docs: http://{HOST}/api/docs              ║
-║                                                          ║
-║  ⚠️  NEXT STEP: Set your API keys in .env               ║
-║  SSH in:  ssh root@{HOST}                      ║
-║  Edit:    nano /opt/digital-twin/.env                    ║
-║  Restart: systemctl restart digital-twin                 ║
-╚══════════════════════════════════════════════════════════╝
+--- Digital Twin deployed! ---
+  http://{HOST}
+  API docs: http://{HOST}/api/docs
+------------------------------
 """)
 
 
