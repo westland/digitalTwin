@@ -88,16 +88,40 @@ Path("./data/notes").mkdir(parents=True, exist_ok=True)
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _load_professor_context() -> str:
+    """Load professor_context.txt and extract the prompt-relevant sections."""
+    config_path = Path("../config/professor_context.txt")
+    if not config_path.exists():
+        config_path = Path("./config/professor_context.txt")
+    if not config_path.exists():
+        return ""
+    text = config_path.read_text(encoding="utf-8")
+    # Strip comment lines (starting with #) and blank lines, keep content
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#") or not stripped:
+            continue
+        lines.append(stripped)
+    return "\n".join(lines)
+
+
 def _build_system_prompt(topic: Optional[str], emotion: Optional[dict], lecture_script: Optional[str]) -> str:
-    prof_name = os.getenv("PROFESSOR_NAME", "Professor")
-    base = (
-        f"You are {prof_name}, a university professor delivering a 1:1 tutoring session. "
-        "You are knowledgeable, patient, and encouraging. Speak naturally and conversationally. "
-        "Keep responses concise (2-4 sentences) unless giving a lecture. "
-        "Use clear examples. Never make up facts — if you don't know, say so. "
-    )
+    context = _load_professor_context()
+
+    if context:
+        base = context
+    else:
+        prof_name = os.getenv("PROFESSOR_NAME", "Professor")
+        base = (
+            f"You are {prof_name}, a university professor delivering a 1:1 tutoring session. "
+            "You are knowledgeable, patient, and encouraging. Speak naturally and conversationally. "
+            "Keep responses concise (2-4 sentences) unless giving a lecture. "
+            "Use clear examples. Never make up facts — if you don't know, say so. "
+        )
+
     if topic:
-        base += f"The current topic is: {topic}. "
+        base += f"\n\nThe current session topic is: {topic}."
     if lecture_script:
         base += (
             "\n\nLECTURE MODE: Deliver the following lecture script naturally, "

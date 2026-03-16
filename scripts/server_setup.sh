@@ -20,7 +20,7 @@ echo "Node: $(node -v)   npm: $(npm -v)"
 
 # --- Project directory ---
 APP_DIR="/opt/digital-twin"
-mkdir -p "$APP_DIR"/{backend,frontend,data/{chroma,notes},logs}
+mkdir -p "$APP_DIR"/{backend,frontend,data/{chroma,notes},logs,config}
 
 # --- Python venv ---
 if [ ! -d "$APP_DIR/backend/venv" ]; then
