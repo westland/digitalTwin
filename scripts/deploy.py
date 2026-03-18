@@ -26,7 +26,6 @@ INCLUDE = [
     "frontend/package.json",
     "frontend/vite.config.js",
     "scripts/server_setup.sh",
-    "config/professor_context.txt",
     ".env.example",
     ".env",
 ]
