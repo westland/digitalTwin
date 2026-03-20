@@ -15,7 +15,8 @@ import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision'
 const WS_BASE = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
 const WS_URL  = `${WS_BASE}//${window.location.host}/ws/emotion`
 
-const SEND_INTERVAL_MS = 2000   // send emotion every 2 seconds
+const SEND_INTERVAL_MS  = 3000   // send emotion every 3 seconds
+const DETECT_INTERVAL_MS = 500  // run detection at most every 500ms (~2fps)
 const MODEL_URL = 'https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task'
 
 function classifyEmotion(blendshapes) {
@@ -106,13 +107,21 @@ export function useEmotionDetection(sessionId, enabled = true) {
     }
   }, [])
 
-  // Detection loop
+  const lastDetect = useRef(0)
+
+  // Detection loop — throttled to DETECT_INTERVAL_MS to avoid saturating the CPU
   const detect = useCallback(() => {
+    const now = performance.now()
+    if (now - lastDetect.current < DETECT_INTERVAL_MS) {
+      rafRef.current = requestAnimationFrame(detect)
+      return
+    }
+    lastDetect.current = now
+
     if (!landmarker.current || !videoRef.current || videoRef.current.readyState < 2) {
       rafRef.current = requestAnimationFrame(detect)
       return
     }
-    const now = performance.now()
     const result = landmarker.current.detectForVideo(videoRef.current, now)
 
     if (result.faceBlendshapes && result.faceBlendshapes.length > 0) {
@@ -120,7 +129,6 @@ export function useEmotionDetection(sessionId, enabled = true) {
       const emotionData = classifyEmotion(blendshapes)
       setCurrentEmotion(emotionData.emotion)
 
-      // Throttle WS sends
       if (wsRef.current?.readyState === WebSocket.OPEN && now - lastSend.current > SEND_INTERVAL_MS) {
         lastSend.current = now
         wsRef.current.send(JSON.stringify({ session_id: sessionId, ...emotionData }))

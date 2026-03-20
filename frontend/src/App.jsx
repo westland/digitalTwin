@@ -8,7 +8,7 @@ export default function App() {
   const [sessionId, setSessionId]       = useState(null)
   const [showNotes, setShowNotes]       = useState(false)
   const [health, setHealth]             = useState(null)
-  const [emotionEnabled, setEmotion]    = useState(true)
+  const [emotionEnabled, setEmotion]    = useState(false)
 
   useEffect(() => {
     healthCheck().then(setHealth).catch(() => {})
