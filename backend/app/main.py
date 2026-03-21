@@ -60,7 +60,7 @@ async def lifespan(app: FastAPI):
     global rag, tavus, gemini_model
     logger.info("Starting up Digital Twin backend…")
     genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-    gemini_model = genai.GenerativeModel("gemini-2.0-flash")
+    gemini_model = genai.GenerativeModel("models/gemini-2.5-flash")
     rag = RAGSystem(persist_dir=os.getenv("CHROMA_DIR", "./data/chroma"))
     try:
         tavus = TavusClient()
