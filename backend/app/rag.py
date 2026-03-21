@@ -9,13 +9,24 @@ from pathlib import Path
 from typing import Optional
 
 import chromadb
-from chromadb.utils import embedding_functions
+from chromadb import EmbeddingFunction
 from openai import OpenAI
 
 logger = logging.getLogger(__name__)
 
 CHUNK_SIZE = 600       # tokens approx (chars / 4)
 CHUNK_OVERLAP = 100
+
+
+class _DirectOpenAIEmbedder(EmbeddingFunction):
+    """Calls OpenAI embeddings directly, bypassing chromadb's internal wrapper."""
+    def __init__(self, api_key: str, model: str = "text-embedding-3-small"):
+        self._client = OpenAI(api_key=api_key)
+        self._model  = model
+
+    def __call__(self, input: list) -> list:
+        resp = self._client.embeddings.create(input=input, model=self._model)
+        return [e.embedding for e in resp.data]
 
 
 def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
@@ -37,10 +48,7 @@ class RAGSystem:
         Path(persist_dir).mkdir(parents=True, exist_ok=True)
         api_key = os.getenv("OPENAI_API_KEY")
 
-        self.openai_ef = embedding_functions.OpenAIEmbeddingFunction(
-            api_key=api_key,
-            model_name="text-embedding-3-small"
-        )
+        self.openai_ef = _DirectOpenAIEmbedder(api_key=api_key)
         self.client = chromadb.PersistentClient(path=persist_dir)
         self.collection = self.client.get_or_create_collection(
             name="class_notes",

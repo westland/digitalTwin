@@ -30,11 +30,14 @@ export default function NotesManager({ onClose }) {
         if (!file) throw new Error('No file selected.')
         result = await uploadNotesFile(topic.trim(), file)
       }
-      setMessage({ type: 'success', text: `Added ${result.chunks_added} chunks for "${result.topic}".` })
+      setMessage({
+        type: 'success',
+        text: `✅ Successfully ingested "${result.topic}" — ${result.chunks_added} chunks added to the knowledge base.`
+      })
       setTopic(''); setText(''); setFile(null)
       fetchTopics()
     } catch (err) {
-      setMessage({ type: 'error', text: err.message })
+      setMessage({ type: 'error', text: `❌ Upload failed: ${err.message}` })
     } finally {
       setLoading(false)
     }
