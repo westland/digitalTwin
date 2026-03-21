@@ -25,8 +25,13 @@ class _DirectOpenAIEmbedder(EmbeddingFunction):
         self._model  = model
 
     def __call__(self, input: list) -> list:
-        resp = self._client.embeddings.create(input=input, model=self._model)
-        return [e.embedding for e in resp.data]
+        try:
+            resp = self._client.embeddings.create(input=input, model=self._model)
+            return [e.embedding for e in resp.data]
+        except Exception as exc:
+            # Convert to plain RuntimeError so chromadb's error wrapper doesn't
+            # try to re-raise it as openai.APIStatusError (broken in openai>=1.55)
+            raise RuntimeError(f"OpenAI embedding failed: {exc}") from None
 
 
 def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
