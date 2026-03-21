@@ -39,7 +39,7 @@ export default function App() {
       </nav>
 
       {/* Main content */}
-      <AvatarSession sessionId={sessionId} onSessionChange={setSessionId} />
+      <AvatarSession sessionId={sessionId} onSessionChange={setSessionId} onOpenNotes={() => setShowNotes(true)} />
 
       {/* Emotion detector (background, shows self-view thumbnail) */}
       <EmotionDetector sessionId={sessionId} enabled={emotionEnabled && !!sessionId} />

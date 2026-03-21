@@ -9,7 +9,7 @@ import { startConversation, endConversation, generateLectureScript } from '../ap
 
 const isMobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent)
 
-export default function AvatarSession({ onSessionChange }) {
+export default function AvatarSession({ onSessionChange, onOpenNotes }) {
   const [mode, setMode]                   = useState('conversation') // 'conversation' | 'lecture'
   const [topic, setTopic]                 = useState('')
   const [duration, setDuration]           = useState(6)
@@ -129,6 +129,11 @@ export default function AvatarSession({ onSessionChange }) {
         <h1 style={s.title}>🎓 Digital Twin Teaching Assistant</h1>
         <p style={s.sub}>Professor J Christopher Westland — AI avatar for 1:1 student tutoring</p>
 
+        {/* Knowledge Base button — prominent, always visible */}
+        <button onClick={onOpenNotes} style={s.kbBtn}>
+          📚 Upload Course Notes / Knowledge Base
+        </button>
+
         {/* Mode tabs */}
         <div style={s.tabs}>
           <button
@@ -216,7 +221,7 @@ export default function AvatarSession({ onSessionChange }) {
         </div>
 
         <p style={s.hint}>
-          💡 Upload course notes first via the <strong>Knowledge Base</strong> button above to power the lecture script generator.
+          💡 Upload course notes via the button above to power the lecture script generator with your own material.
         </p>
       </div>
     </div>
@@ -241,6 +246,7 @@ const s = {
   startBtn:    { padding: 14, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 4, opacity: 1 },
   btn:         { padding: '8px 18px', border: 'none', borderRadius: 8, color: '#fff', cursor: 'pointer', fontSize: 13, fontWeight: 600 },
   hint:        { marginTop: 16, color: '#666', fontSize: 12, textAlign: 'center', lineHeight: 1.6 },
+  kbBtn:       { width: '100%', padding: '10px 16px', background: '#1e2a4a', border: '1px solid #2563eb', borderRadius: 10, color: '#60a5fa', cursor: 'pointer', fontSize: 14, fontWeight: 600, marginBottom: 20 },
   sessionWrap: { display: 'flex', flexDirection: 'column', height: '100vh', background: '#0f1117' },
   iframe:      { flex: 1, border: 'none', width: '100%' },
   bar:         { display: 'flex', alignItems: 'flex-start', gap: 12, padding: '10px 16px', background: '#1a1d2e', borderTop: '1px solid #333', flexWrap: 'wrap' },
