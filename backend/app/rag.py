@@ -1,6 +1,6 @@
 """
 RAG system: ingest notes → ChromaDB, query relevant chunks for LLM context.
-Uses OpenAI text-embedding-3-small for embeddings.
+Uses Google Gemini text-embedding-004 for embeddings.
 """
 import os
 import hashlib
@@ -10,37 +10,19 @@ from typing import Optional
 
 import chromadb
 from chromadb import EmbeddingFunction
-from openai import OpenAI
+import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
-CHUNK_SIZE = 600       # tokens approx (chars / 4)
+CHUNK_SIZE    = 600
 CHUNK_OVERLAP = 100
 
 
-class _DirectOpenAIEmbedder(EmbeddingFunction):
-    """Calls OpenAI embeddings directly, bypassing chromadb's internal wrapper."""
-    def __init__(self, api_key: str, model: str = "text-embedding-3-small"):
-        self._client = OpenAI(api_key=api_key)
-        self._model  = model
-
-    def __call__(self, input: list) -> list:
-        try:
-            resp = self._client.embeddings.create(input=input, model=self._model)
-            return [e.embedding for e in resp.data]
-        except Exception as exc:
-            # Convert to plain RuntimeError so chromadb's error wrapper doesn't
-            # try to re-raise it as openai.APIStatusError (broken in openai>=1.55)
-            raise RuntimeError(f"OpenAI embedding failed: {exc}") from None
-
-
 def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[str]:
-    """Split text into overlapping chunks by character count."""
-    chunks = []
-    start = 0
+    chunks, start = [], 0
     text = text.strip()
     while start < len(text):
-        end = start + chunk_size * 4  # rough char estimate
+        end   = start + chunk_size * 4
         chunk = text[start:end]
         if chunk:
             chunks.append(chunk)
@@ -48,77 +30,89 @@ def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OV
     return chunks
 
 
+class _GeminiEmbedder(EmbeddingFunction):
+    """Calls Gemini text-embedding-004 directly, bypassing chromadb's internal wrappers."""
+    def __init__(self, api_key: str):
+        genai.configure(api_key=api_key)
+
+    def __call__(self, input: list) -> list:
+        try:
+            result = genai.embed_content(
+                model="models/text-embedding-004",
+                content=input,
+                task_type="retrieval_document",
+            )
+            # embed_content returns a dict with key 'embedding'
+            # When content is a list it returns a list of embeddings
+            embeddings = result.get("embedding", [])
+            if embeddings and not isinstance(embeddings[0], list):
+                embeddings = [embeddings]  # single text → wrap
+            return embeddings
+        except Exception as exc:
+            raise RuntimeError(f"Gemini embedding failed: {exc}") from None
+
+
 class RAGSystem:
     def __init__(self, persist_dir: str = "./data/chroma"):
         Path(persist_dir).mkdir(parents=True, exist_ok=True)
-        api_key = os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("GEMINI_API_KEY")
+        genai.configure(api_key=api_key)
 
-        self.openai_ef = _DirectOpenAIEmbedder(api_key=api_key)
-        self.client = chromadb.PersistentClient(path=persist_dir)
+        self.embedder   = _GeminiEmbedder(api_key=api_key)
+        self.client     = chromadb.PersistentClient(path=persist_dir)
         self.collection = self.client.get_or_create_collection(
             name="class_notes",
-            embedding_function=self.openai_ef,
-            metadata={"hnsw:space": "cosine"}
+            embedding_function=self.embedder,
+            metadata={"hnsw:space": "cosine"},
         )
-        self.openai = OpenAI(api_key=api_key)
         logger.info(f"RAG system ready. {self.collection.count()} chunks stored.")
 
     def ingest_text(self, content: str, topic: str, source: str = "manual") -> int:
-        """Chunk and store text. Returns number of new chunks added."""
         chunks = _chunk_text(content)
         if not chunks:
             return 0
-
         ids, documents, metadatas = [], [], []
         for i, chunk in enumerate(chunks):
-            doc_id = hashlib.md5(f"{topic}:{source}:{i}:{chunk[:50]}".encode()).hexdigest()
-            # Skip if already exists
+            doc_id   = hashlib.md5(f"{topic}:{source}:{i}:{chunk[:50]}".encode()).hexdigest()
             existing = self.collection.get(ids=[doc_id])
             if existing["ids"]:
                 continue
             ids.append(doc_id)
             documents.append(chunk)
             metadatas.append({"topic": topic, "source": source, "chunk_index": i})
-
         if ids:
             self.collection.add(ids=ids, documents=documents, metadatas=metadatas)
             logger.info(f"Ingested {len(ids)} new chunks for topic '{topic}'")
         return len(ids)
 
     def query(self, question: str, topic: Optional[str] = None, n_results: int = 4) -> str:
-        """Return relevant context string for the given question."""
         count = self.collection.count()
         if count == 0:
             return ""
-
         where = {"topic": topic} if topic else None
         try:
             results = self.collection.query(
                 query_texts=[question],
                 n_results=min(n_results, count),
-                where=where
+                where=where,
             )
             docs = results.get("documents", [[]])[0]
-            if not docs:
-                return ""
-            return "\n\n---\n\n".join(docs)
+            return "\n\n---\n\n".join(docs) if docs else ""
         except Exception as e:
             logger.error(f"RAG query error: {e}")
             return ""
 
     def list_topics(self) -> list[str]:
-        """Return unique topics stored in the knowledge base."""
         try:
             results = self.collection.get(include=["metadatas"])
-            topics = list({m.get("topic", "unknown") for m in results.get("metadatas", [])})
+            topics  = list({m.get("topic", "unknown") for m in results.get("metadatas", [])})
             return sorted(topics)
         except Exception:
             return []
 
     def delete_topic(self, topic: str) -> int:
-        """Remove all chunks for a given topic."""
         results = self.collection.get(where={"topic": topic}, include=["metadatas"])
-        ids = results.get("ids", [])
+        ids     = results.get("ids", [])
         if ids:
             self.collection.delete(ids=ids)
         return len(ids)

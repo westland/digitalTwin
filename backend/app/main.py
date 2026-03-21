@@ -29,7 +29,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
-from openai import AsyncOpenAI
+import google.generativeai as genai
 
 from .rag import RAGSystem
 from .tavus_client import TavusClient
@@ -47,7 +47,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 rag: Optional[RAGSystem] = None
 tavus: Optional[TavusClient] = None
-openai_client: Optional[AsyncOpenAI] = None
+gemini_model = None
 
 # emotion_store[session_id] = {"emotion": "confused", "gaze_away": False, ...}
 emotion_store: dict[str, dict] = {}
@@ -57,10 +57,11 @@ persona_store: dict[str, str] = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global rag, tavus, openai_client
+    global rag, tavus, gemini_model
     logger.info("Starting up Digital Twin backend…")
+    genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+    gemini_model = genai.GenerativeModel("gemini-2.0-flash")
     rag = RAGSystem(persist_dir=os.getenv("CHROMA_DIR", "./data/chroma"))
-    openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
     try:
         tavus = TavusClient()
         logger.info("Tavus client initialized.")
@@ -292,34 +293,30 @@ async def custom_llm(req: LLMRequest):
     # RAG augmentation
     messages = await _rag_augment_messages(messages, topic=topic)
 
-    if req.stream:
-        async def generate():
-            async with openai_client.beta.realtime if hasattr(openai_client, 'beta') else openai_client as _:
-                pass
-            stream = await openai_client.chat.completions.create(
-                model="gpt-4o",
-                messages=messages,
-                temperature=req.temperature or 0.7,
-                max_tokens=req.max_tokens or 512,
-                stream=True
-            )
-            async for chunk in stream:
-                delta = chunk.choices[0].delta.content if chunk.choices[0].delta.content else ""
-                data = {
-                    "choices": [{"delta": {"content": delta, "role": "assistant"}, "finish_reason": chunk.choices[0].finish_reason}]
-                }
-                yield f"data: {json.dumps(data)}\n\n"
-            yield "data: [DONE]\n\n"
+    # Convert messages to Gemini format
+    gemini_parts = []
+    for m in messages:
+        if m["role"] == "system":
+            gemini_parts.append(f"[System]: {m['content']}")
+        elif m["role"] == "user":
+            gemini_parts.append(f"User: {m['content']}")
+        elif m["role"] == "assistant":
+            gemini_parts.append(f"Assistant: {m['content']}")
+    prompt = "\n\n".join(gemini_parts)
 
-        return StreamingResponse(generate(), media_type="text/event-stream")
-    else:
-        response = await openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages,
+    response = await asyncio.to_thread(
+        gemini_model.generate_content,
+        prompt,
+        generation_config=genai.GenerationConfig(
             temperature=req.temperature or 0.7,
-            max_tokens=req.max_tokens or 512,
+            max_output_tokens=req.max_tokens or 512,
         )
-        return JSONResponse(response.model_dump())
+    )
+    text = response.text
+    # Return in OpenAI-compatible format so frontend/Tavus parsing works
+    return JSONResponse({
+        "choices": [{"message": {"role": "assistant", "content": text}, "finish_reason": "stop"}]
+    })
 
 
 # ---------------------------------------------------------------------------
@@ -362,22 +359,16 @@ async def ingest_notes_file(
     else:
         raise HTTPException(400, f"Unsupported file type: {ext}. Use .txt, .pdf, or .docx")
 
-    # Optionally clean up with GPT before ingesting
+    # Optionally clean up with Gemini before ingesting
     clean = os.getenv("AUTO_CLEAN_NOTES", "false").lower() == "true"
     if clean and text:
-        resp = await openai_client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{
-                "role": "user",
-                "content": (
-                    f"Clean up these class notes on '{topic}' into a clear, well-structured knowledge base. "
-                    "Fix grammar, clarify definitions, and ensure consistency. Return only the cleaned text.\n\n"
-                    + text[:8000]
-                )
-            }],
-            max_tokens=4096
+        resp = await asyncio.to_thread(
+            gemini_model.generate_content,
+            f"Clean up these class notes on '{topic}' into a clear, well-structured knowledge base. "
+            "Fix grammar, clarify definitions, and ensure consistency. Return only the cleaned text.\n\n"
+            + text[:8000]
         )
-        text = resp.choices[0].message.content or text
+        text = resp.text or text
 
     count = rag.ingest_text(text, topic=topic, source=filename)
     return {"filename": filename, "topic": topic, "chunks_added": count, "chars": len(text)}
@@ -405,31 +396,16 @@ async def generate_lecture_script(req: LectureRequest):
     Returns the script text — paste it into the conversation or use it as context.
     """
     context = rag.query(req.topic, topic=req.topic, n_results=6)
-    prompt_messages = [
-        {
-            "role": "system",
-            "content": (
-                f"You are {os.getenv('PROFESSOR_NAME', 'Professor')}, preparing a {req.duration_minutes}-minute "
-                "lecture script. Write in first person, conversational teaching style. "
-                "Use the provided notes as source material. Include 2-3 key concepts with examples. "
-                "End with a question to check understanding."
-            )
-        },
-        {
-            "role": "user",
-            "content": (
-                f"Generate a {req.duration_minutes}-minute lecture on: {req.topic}\n\n"
-                + (f"Notes:\n{context}" if context else "Use your general knowledge.")
-            )
-        }
-    ]
-    response = await openai_client.chat.completions.create(
-        model="gpt-4o",
-        messages=prompt_messages,
-        max_tokens=1500,
-        temperature=0.7
+    prompt = (
+        f"You are {os.getenv('PROFESSOR_NAME', 'Professor')}, preparing a {req.duration_minutes}-minute "
+        "lecture script. Write in first person, conversational teaching style. "
+        "Use the provided notes as source material. Include 2-3 key concepts with examples. "
+        "End with a question to check understanding.\n\n"
+        f"Generate a {req.duration_minutes}-minute lecture on: {req.topic}\n\n"
+        + (f"Notes:\n{context}" if context else "Use your general knowledge.")
     )
-    script = response.choices[0].message.content
+    response = await asyncio.to_thread(gemini_model.generate_content, prompt)
+    script = response.text
     return {"topic": req.topic, "duration_minutes": req.duration_minutes, "script": script}
 
 
