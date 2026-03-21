@@ -38,7 +38,7 @@ class _GeminiEmbedder(EmbeddingFunction):
     def __call__(self, input: list) -> list:
         try:
             result = genai.embed_content(
-                model="models/text-embedding-004",
+                model="models/gemini-embedding-001",
                 content=input,
                 task_type="retrieval_document",
             )
