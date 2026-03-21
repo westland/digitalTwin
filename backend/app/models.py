@@ -29,8 +29,7 @@ class EmotionPayload(BaseModel):
 class ConversationRequest(BaseModel):
     persona_name: Optional[str] = "Digital Twin Professor"
     topic: Optional[str] = None
-    lecture_mode: bool = False
-    lecture_notes: Optional[str] = None
+    lecture_script: Optional[str] = None   # if set, session opens in lecture mode
 
 
 class NotesIngestRequest(BaseModel):
@@ -39,6 +38,6 @@ class NotesIngestRequest(BaseModel):
 
 
 class LectureRequest(BaseModel):
-    conversation_id: str
     topic: str
     duration_minutes: int = 6
+    conversation_id: Optional[str] = None  # not required — script generated pre-session

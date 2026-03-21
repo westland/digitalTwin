@@ -223,12 +223,28 @@ async def start_conversation(req: ConversationRequest):
         persona_store["default"] = persona_id
         logger.info(f"Auto-created persona: {persona_id}")
 
+    if req.lecture_script:
+        conversational_context = (
+            "LECTURE MODE ACTIVE. Deliver the following lecture script verbatim, "
+            "speaking naturally and conversationally — not robotically. "
+            "If the student asks a question or interrupts, pause, answer their question directly, "
+            "then say 'Returning to the lecture...' and continue from where you left off. "
+            "Begin the lecture immediately after a brief greeting.\n\n"
+            "LECTURE SCRIPT:\n\n" + req.lecture_script
+        )
+    else:
+        conversational_context = (
+            "This is a 1:1 tutoring session. The student may ask questions on any topic. "
+            "Be conversational, patient, and encouraging."
+        )
+
     result = await tavus.create_conversation(
         persona_id=persona_id,
         conversation_name=req.topic or "Teaching Session",
+        conversational_context=conversational_context,
     )
     conversation_id = result.get("conversation_id") or result.get("id")
-    logger.info(f"Conversation started: {conversation_id}")
+    logger.info(f"Conversation started: {conversation_id} (lecture_mode={bool(req.lecture_script)})")
     return result
 
 

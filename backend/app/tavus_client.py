@@ -50,15 +50,15 @@ class TavusClient:
         self,
         persona_id: str,
         conversation_name: Optional[str] = None,
+        conversational_context: Optional[str] = None,
     ) -> dict:
         """
         Start a CVI conversation session.
         Returns conversation object with `conversation_url` for embedding.
-        custom_llm_url is configured on the persona, not the conversation.
         """
         payload = {
             "persona_id": persona_id,
-            "conversational_context": (
+            "conversational_context": conversational_context or (
                 "This is a 1:1 teaching session. The student may ask questions or listen to a lecture."
             ),
         }

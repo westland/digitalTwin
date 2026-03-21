@@ -1,10 +1,10 @@
 const BASE = '/api'
 
-export async function startConversation(topic) {
+export async function startConversation(topic, lectureScript = null) {
   const res = await fetch(`${BASE}/conversations`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ topic, lecture_mode: false })
+    body: JSON.stringify({ topic, lecture_script: lectureScript })
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
@@ -45,11 +45,11 @@ export async function deleteTopic(topic) {
   return res.json()
 }
 
-export async function generateLectureScript(conversationId, topic, durationMinutes = 6) {
+export async function generateLectureScript(topic, durationMinutes = 6) {
   const res = await fetch(`${BASE}/lecture/script`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversation_id: conversationId, topic, duration_minutes: durationMinutes })
+    body: JSON.stringify({ topic, duration_minutes: durationMinutes })
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
