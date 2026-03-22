@@ -5,7 +5,8 @@
  *   Lecture      — avatar delivers a scripted lecture verbatim; pauses for questions
  */
 import React, { useState, useCallback } from 'react'
-import { startConversation, endConversation, generateLectureScript } from '../api/client.js'
+import { startConversation, endConversation, generateLectureScript, saveScript } from '../api/client.js'
+import ScriptLibrary from './ScriptLibrary.jsx'
 
 const isMobile = /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent)
 
@@ -15,6 +16,7 @@ export default function AvatarSession({ onSessionChange, onOpenNotes }) {
   const [duration, setDuration]           = useState(6)
   const [script, setScript]               = useState('')
   const [generatingScript, setGenerating] = useState(false)
+  const [showLibrary, setShowLibrary]     = useState(false)
   const [conversationId, setConversationId] = useState(null)
   const [conversationUrl, setConversationUrl] = useState(null)
   const [loading, setLoading]             = useState(false)
@@ -28,6 +30,8 @@ export default function AvatarSession({ onSessionChange, onOpenNotes }) {
     try {
       const data = await generateLectureScript(topic, duration)
       setScript(data.script)
+      // Auto-save so it appears in the library
+      await saveScript(topic, data.script, duration).catch(() => {})
     } catch (e) {
       setError(e.message)
     } finally {
@@ -129,10 +133,15 @@ export default function AvatarSession({ onSessionChange, onOpenNotes }) {
         <h1 style={s.title}>🎓 Digital Twin Teaching Assistant</h1>
         <p style={s.sub}>Professor J Christopher Westland — AI avatar for 1:1 student tutoring</p>
 
-        {/* Knowledge Base button — prominent, always visible */}
-        <button onClick={onOpenNotes} style={s.kbBtn}>
-          📚 Upload Course Notes / Knowledge Base
-        </button>
+        {/* Knowledge Base + Script Library buttons */}
+        <div style={{ display: 'flex', gap: 10, marginBottom: 20 }}>
+          <button onClick={onOpenNotes} style={{ ...s.kbBtn, marginBottom: 0, flex: 1 }}>
+            📚 Upload Course Notes
+          </button>
+          <button onClick={() => setShowLibrary(true)} style={{ ...s.kbBtn, marginBottom: 0, flex: 1, borderColor: '#7c3aed', color: '#a78bfa' }}>
+            📝 Saved Scripts
+          </button>
+        </div>
 
         {/* Mode tabs */}
         <div style={s.tabs}>
@@ -221,9 +230,21 @@ export default function AvatarSession({ onSessionChange, onOpenNotes }) {
         </div>
 
         <p style={s.hint}>
-          💡 Upload course notes via the button above to power the lecture script generator with your own material.
+          💡 Upload course notes above to power the script generator. Scripts are saved automatically and can be edited later via <strong>Saved Scripts</strong>.
         </p>
       </div>
+
+      {showLibrary && (
+        <ScriptLibrary
+          onClose={() => setShowLibrary(false)}
+          onLoad={sc => {
+            setTopic(sc.topic)
+            setScript(sc.script)
+            setMode('lecture')
+            setShowLibrary(false)
+          }}
+        />
+      )}
     </div>
   )
 }

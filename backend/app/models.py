@@ -41,3 +41,22 @@ class LectureRequest(BaseModel):
     topic: str
     duration_minutes: int = 6
     conversation_id: Optional[str] = None  # not required — script generated pre-session
+
+
+class SavedScript(BaseModel):
+    id: str
+    topic: str
+    script: str
+    duration_minutes: int
+    created_at: str
+    updated_at: str
+
+
+class SaveScriptRequest(BaseModel):
+    topic: str
+    script: str
+    duration_minutes: int = 6
+
+
+class UpdateScriptRequest(BaseModel):
+    script: str

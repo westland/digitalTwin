@@ -35,12 +35,27 @@ from .rag import RAGSystem
 from .tavus_client import TavusClient
 from .models import (
     LLMRequest, EmotionPayload, ConversationRequest,
-    NotesIngestRequest, LectureRequest
+    NotesIngestRequest, LectureRequest,
+    SaveScriptRequest, UpdateScriptRequest
 )
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s — %(message)s")
 logger = logging.getLogger(__name__)
+
+SCRIPTS_DIR = Path("./data/scripts")
+SCRIPTS_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def _script_path(script_id: str) -> Path:
+    return SCRIPTS_DIR / f"{script_id}.json"
+
+
+def _read_script(script_id: str) -> dict:
+    p = _script_path(script_id)
+    if not p.exists():
+        raise HTTPException(404, f"Script '{script_id}' not found")
+    return json.loads(p.read_text(encoding="utf-8"))
 
 # ---------------------------------------------------------------------------
 # Global state
@@ -407,6 +422,61 @@ async def generate_lecture_script(req: LectureRequest):
     response = await asyncio.to_thread(gemini_model.generate_content, prompt)
     script = response.text
     return {"topic": req.topic, "duration_minutes": req.duration_minutes, "script": script}
+
+
+# ---------------------------------------------------------------------------
+# Saved lecture scripts
+# ---------------------------------------------------------------------------
+
+@app.post("/api/scripts")
+async def save_script(req: SaveScriptRequest):
+    """Save a lecture script for later editing."""
+    import uuid
+    from datetime import datetime, timezone
+    now = datetime.now(timezone.utc).isoformat()
+    script_id = uuid.uuid4().hex[:12]
+    data = {
+        "id": script_id,
+        "topic": req.topic,
+        "script": req.script,
+        "duration_minutes": req.duration_minutes,
+        "created_at": now,
+        "updated_at": now,
+    }
+    _script_path(script_id).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    logger.info(f"Saved script {script_id} — topic: {req.topic}")
+    return data
+
+
+@app.get("/api/scripts")
+async def list_scripts():
+    """List all saved lecture scripts, newest first."""
+    scripts = []
+    for p in sorted(SCRIPTS_DIR.glob("*.json"), key=lambda f: f.stat().st_mtime, reverse=True):
+        try:
+            scripts.append(json.loads(p.read_text(encoding="utf-8")))
+        except Exception:
+            pass
+    return {"scripts": scripts}
+
+
+@app.put("/api/scripts/{script_id}")
+async def update_script(script_id: str, req: UpdateScriptRequest):
+    """Update (re-edit) a saved lecture script."""
+    from datetime import datetime, timezone
+    data = _read_script(script_id)
+    data["script"] = req.script
+    data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    _script_path(script_id).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    return data
+
+
+@app.delete("/api/scripts/{script_id}")
+async def delete_script(script_id: str):
+    """Delete a saved lecture script."""
+    _read_script(script_id)  # raises 404 if missing
+    _script_path(script_id).unlink()
+    return {"deleted": script_id}
 
 
 # ---------------------------------------------------------------------------

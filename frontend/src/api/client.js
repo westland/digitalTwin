@@ -55,6 +55,38 @@ export async function generateLectureScript(topic, durationMinutes = 6) {
   return res.json()
 }
 
+export async function saveScript(topic, script, durationMinutes) {
+  const res = await fetch(`${BASE}/scripts`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ topic, script, duration_minutes: durationMinutes })
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function listScripts() {
+  const res = await fetch(`${BASE}/scripts`)
+  if (!res.ok) return { scripts: [] }
+  return res.json()
+}
+
+export async function updateScript(id, script) {
+  const res = await fetch(`${BASE}/scripts/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ script })
+  })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
+export async function deleteScript(id) {
+  const res = await fetch(`${BASE}/scripts/${id}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error(await res.text())
+  return res.json()
+}
+
 export async function healthCheck() {
   const res = await fetch(`${BASE}/health`)
   if (!res.ok) return null
